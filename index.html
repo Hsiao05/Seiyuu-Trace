@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="根据 Bangumi 收藏统计动画声优与出演角色">
-  <title>声迹 · Bangumi 声优统计</title>
+  <title>声迹 · Bangumi 角色/声优统计</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
   <div class="app-shell">
@@ -20,10 +20,13 @@
       <button id="sidebarClose" class="sidebar-close" type="button" aria-label="收起侧边栏"><i data-lucide="x"></i></button>
 
       <nav class="nav" aria-label="主导航">
-        <button class="nav-item active" type="button"><i data-lucide="chart-no-axes-column-increasing"></i><span>声优统计</span></button>
+        <button class="nav-item active" type="button" data-view="stats"><i data-lucide="chart-no-axes-column-increasing"></i><span>声优统计</span></button>
+        <button class="nav-item" type="button" data-view="library"><i data-lucide="library-big"></i><span>片目库</span><b id="navAnimeCount">0</b></button>
+        <button class="nav-item" type="button" data-view="characters"><i data-lucide="users-round"></i><span>角色库</span><b id="navCharacterCount">0</b></button>
+        <button class="nav-item" type="button" data-view="actors"><i data-lucide="mic-2"></i><span>声优库</span><b id="navActorCount">0</b></button>
+        <button class="nav-item" type="button" data-view="calendar"><i data-lucide="calendar-days"></i><span>生日日历</span></button>
         <button class="nav-item" type="button" data-action="open-recap"><i data-lucide="trophy"></i><span>声迹颁奖礼</span></button>
         <button class="nav-item" type="button" data-action="focus-search"><i data-lucide="search"></i><span>搜索动画</span></button>
-        <button class="nav-item" type="button" data-action="show-library"><i data-lucide="library-big"></i><span>片目库</span><b id="navAnimeCount">0</b></button>
       </nav>
 
       <div class="sidebar-section">
@@ -60,7 +63,14 @@
         <button id="refreshBtn" class="icon-btn" type="button" aria-label="重新统计" title="重新统计"><i data-lucide="refresh-cw"></i></button>
       </header>
 
-      <section class="content">
+      <div id="progressPanel" class="progress-panel global-progress" hidden>
+        <div class="progress-copy"><span id="progressText">正在读取收藏…</span><strong id="progressPercent">0%</strong></div>
+        <div class="progress-track"><span id="progressBar"></span></div>
+        <div class="progress-meta"><span id="progressDetail">准备开始</span><button id="cancelBtn" type="button" class="text-action">取消</button></div>
+      </div>
+      <div id="notice" class="notice global-notice" role="status" hidden></div>
+
+      <section id="viewStats" class="content app-view active" data-view="stats">
         <div class="page-heading">
           <div><p class="eyebrow" id="sourceLabel">WAITING FOR IMPORT</p><h1>我的声音图鉴</h1><p id="collectionDescription">从看过的动画中，找出最熟悉的那些声音。</p></div>
           <div class="heading-actions">
@@ -71,14 +81,6 @@
             </div>
           </div>
         </div>
-
-        <div id="progressPanel" class="progress-panel" hidden>
-          <div class="progress-copy"><span id="progressText">正在读取收藏…</span><strong id="progressPercent">0%</strong></div>
-          <div class="progress-track"><span id="progressBar"></span></div>
-          <button id="cancelBtn" type="button" class="text-action">取消</button>
-        </div>
-
-        <div id="notice" class="notice" role="status" hidden></div>
 
         <button id="mobileImportGuide" class="mobile-import-guide" type="button">
           <span class="guide-icon"><i data-lucide="panel-left-open"></i></span>
@@ -120,6 +122,89 @@
           <p class="rules-note">无权统计不区分角色类型，每条出演记录均计 1 次。角色分类以 Bangumi 条目中的关联类型为准。</p>
         </section>
       </section>
+
+      <section id="viewCalendar" class="content app-view" data-view="calendar" hidden>
+        <div class="view-heading">
+          <div><p class="eyebrow">BIRTHDAY CALENDAR</p><h1>生日日历</h1><p>查看片单中角色与声优的生日。</p></div>
+          <div class="calendar-view-switch" role="group" aria-label="日历显示方式">
+            <button class="active" type="button" data-calendar-view="month">月历</button>
+            <button type="button" data-calendar-view="year">全年一览</button>
+          </div>
+        </div>
+        <div class="calendar-toolbar">
+          <div class="month-nav">
+            <button id="prevMonthBtn" class="icon-btn" type="button" aria-label="上个月"><i data-lucide="chevron-left"></i></button>
+            <strong id="calendarMonthLabel"></strong>
+            <button id="nextMonthBtn" class="icon-btn" type="button" aria-label="下个月"><i data-lucide="chevron-right"></i></button>
+            <button id="todayBtn" class="secondary-btn" type="button">今天</button>
+          </div>
+          <div class="calendar-entity-filter" role="group" aria-label="生日对象">
+            <button class="active" type="button" data-entity="all">全部</button>
+            <button type="button" data-entity="character"><span class="dot main"></span>角色</button>
+            <button type="button" data-entity="actor"><span class="dot support"></span>声优</button>
+          </div>
+        </div>
+        <div id="calendarEmpty" class="page-empty" hidden><i data-lucide="cake-slice"></i><strong>还没有生日数据</strong><span>导入片单后会自动解析角色与声优生日</span><button class="primary-btn" type="button" data-action="open-import">去导入</button></div>
+        <div id="monthCalendar" class="calendar-shell">
+          <div class="calendar-weekdays"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+          <div id="calendarGrid" class="calendar-grid" role="grid" aria-label="生日日历"></div>
+        </div>
+        <div id="yearBirthdayList" class="birthday-year-list" hidden></div>
+      </section>
+
+      <section id="viewCharacters" class="content app-view" data-view="characters" hidden>
+        <div class="view-heading">
+          <div><p class="eyebrow">CHARACTER LIBRARY</p><h1>角色库</h1><p id="characterViewCount">共 0 个角色</p></div>
+        </div>
+        <div class="library-tools character-tools">
+          <div class="tool-search"><i data-lucide="search"></i><input id="characterSearch" type="search" placeholder="搜索原名、假名、罗马音、英文或简体中文名"></div>
+          <select id="characterGenderFilter" aria-label="筛选性别"><option value="all">全部性别</option><option value="male">男性</option><option value="female">女性</option><option value="other">其他 / 未知</option></select>
+          <select id="characterSubjectFilter" aria-label="筛选作品"><option value="all">全部作品</option></select>
+        </div>
+        <div class="character-import-row">
+          <div><strong>手动添加角色</strong><small>输入角色 ID，或粘贴 bangumi.tv / bgm.tv 的角色链接</small></div>
+          <div class="id-add character-id-add"><input id="characterIdInput" type="text" inputmode="url" placeholder="角色 ID 或 Bangumi 链接"><button id="characterIdAddBtn" class="primary-btn" type="button"><i data-lucide="user-round-plus"></i>添加</button></div>
+        </div>
+        <div class="filters character-role-filters" role="group" aria-label="角色类型筛选">
+          <button class="filter-chip active" type="button" data-character-role="all"><span class="dot all"></span>全部</button>
+          <button class="filter-chip" type="button" data-character-role="main"><span class="dot main"></span>主角</button>
+          <button class="filter-chip" type="button" data-character-role="support"><span class="dot support"></span>配角</button>
+          <button class="filter-chip" type="button" data-character-role="guest"><span class="dot guest"></span>客串</button>
+          <button class="filter-chip" type="button" data-character-role="minor"><span class="dot minor"></span>闲角</button>
+        </div>
+        <div id="characterGrid" class="character-grid"></div>
+        <div id="characterEmpty" class="page-empty" hidden><i data-lucide="users-round"></i><strong>没有角色数据</strong><span>导入片单或调整筛选条件</span><button class="primary-btn" type="button" data-action="open-import">去导入</button></div>
+      </section>
+
+      <section id="viewActors" class="content app-view" data-view="actors" hidden>
+        <div class="view-heading">
+          <div><p class="eyebrow">VOICE ACTOR LIBRARY</p><h1>声优库</h1><p id="actorLibraryViewCount">共 0 位声优</p></div>
+        </div>
+        <div class="library-tools actor-library-tools">
+          <div class="tool-search"><i data-lucide="search"></i><input id="actorLibrarySearch" type="search" placeholder="搜索原名、假名、罗马音、英文或简体中文名"></div>
+          <select id="actorLibraryGenderFilter" aria-label="筛选性别"><option value="all">全部性别</option><option value="male">男性</option><option value="female">女性</option><option value="other">其他 / 未知</option></select>
+          <select id="actorLibrarySubjectFilter" aria-label="筛选作品"><option value="all">全部作品</option></select>
+        </div>
+        <div class="character-import-row">
+          <div><strong>手动添加声优</strong><small>输入声优 ID，或粘贴 bangumi.tv / bgm.tv 的 person 链接</small></div>
+          <div class="id-add character-id-add"><input id="actorLibraryIdInput" type="text" inputmode="url" placeholder="声优 ID 或 Bangumi 链接"><button id="actorLibraryIdAddBtn" class="primary-btn" type="button"><i data-lucide="user-round-plus"></i>添加</button></div>
+        </div>
+        <div id="actorLibraryGrid" class="character-grid voice-grid"></div>
+        <div id="actorLibraryEmpty" class="page-empty" hidden><i data-lucide="mic-2"></i><strong>没有声优数据</strong><span>导入片单或手动添加声优</span><button class="primary-btn" type="button" data-action="open-import">去导入</button></div>
+      </section>
+
+      <section id="viewLibrary" class="content app-view" data-view="library" hidden>
+        <div class="view-heading">
+          <div><p class="eyebrow">ANIME LIBRARY</p><h1>片目库</h1><p id="libraryViewCount">共 0 部动画</p></div>
+        </div>
+        <div class="library-tools">
+          <div class="tool-search"><i data-lucide="search"></i><input id="librarySearch" type="search" placeholder="搜索日文、英文、罗马音或简体中文作品名"></div>
+          <div class="id-add"><input id="libraryIdInput" type="text" inputmode="numeric" placeholder="Bangumi ID"><button id="libraryIdAddBtn" class="primary-btn" type="button"><i data-lucide="plus"></i>添加</button></div>
+          <button id="libraryApiSearchBtn" class="secondary-btn" type="button"><i data-lucide="globe-2"></i>搜索 Bangumi</button>
+        </div>
+        <div id="libraryPageGrid" class="library-page-grid"></div>
+        <div id="libraryEmpty" class="page-empty" hidden><i data-lucide="library-big"></i><strong>片目库还是空的</strong><span>输入 Bangumi ID、搜索添加，或从 UID 导入</span><button class="primary-btn" type="button" data-action="open-import">从 UID 导入</button></div>
+      </section>
     </main>
   </div>
 
@@ -142,12 +227,28 @@
     </form>
   </dialog>
 
-  <dialog id="libraryDialog" class="modal library-modal">
+  <dialog id="characterLoadDialog" class="modal confirm-modal">
     <form method="dialog">
-      <div class="modal-head"><div><p class="eyebrow">ANIME LIBRARY</p><h2>已导入片目</h2></div><button class="icon-btn" value="cancel" aria-label="关闭"><i data-lucide="x"></i></button></div>
-      <div id="libraryGrid" class="library-grid"></div>
+      <div class="modal-head"><div><p class="eyebrow">CHARACTER LIBRARY</p><h2>加载角色库？</h2></div><button class="icon-btn" value="cancel" aria-label="关闭"><i data-lucide="x"></i></button></div>
+      <p class="confirm-copy">角色库尚未加载。首次加载需要从 Bangumi 补全角色资料，片目较多时可能需要一些时间；完成后会缓存在当前设备，之后增删作品只更新变化部分。</p>
+      <div class="modal-actions"><button class="secondary-btn" value="cancel">暂不加载</button><button id="characterLoadConfirmBtn" class="primary-btn" type="button"><i data-lucide="download"></i>开始加载</button></div>
     </form>
   </dialog>
+
+  <dialog id="actorLoadDialog" class="modal confirm-modal">
+    <form method="dialog">
+      <div class="modal-head"><div><p class="eyebrow">VOICE ACTOR LIBRARY</p><h2>加载声优库？</h2></div><button class="icon-btn" value="cancel" aria-label="关闭"><i data-lucide="x"></i></button></div>
+      <p class="confirm-copy">声优库尚未加载。首次加载会从 Bangumi 补全声优资料；完成后会缓存在当前设备，之后增删作品只更新变化部分。生日资料已独立加载，不受此操作影响。</p>
+      <div class="modal-actions"><button class="secondary-btn" value="cancel">暂不加载</button><button id="actorLoadConfirmBtn" class="primary-btn" type="button"><i data-lucide="download"></i>开始加载</button></div>
+    </form>
+  </dialog>
+
+  <aside id="birthdayDrawer" class="birthday-drawer" aria-label="当日生日" aria-hidden="true">
+    <div class="drawer-handle"></div>
+    <div class="drawer-head"><div><p class="eyebrow">BIRTHDAYS</p><h2 id="birthdayDrawerTitle"></h2></div><button id="birthdayDrawerClose" class="icon-btn" type="button" aria-label="关闭生日列表"><i data-lucide="x"></i></button></div>
+    <div id="birthdayDrawerList" class="birthday-drawer-list"></div>
+  </aside>
+  <button id="birthdayDrawerBackdrop" class="drawer-backdrop" type="button" aria-label="关闭生日列表" tabindex="-1"></button>
 
   <section id="recap" class="recap" hidden aria-label="声迹颁奖礼回顾">
     <div class="recap-top">
@@ -165,6 +266,6 @@
   </section>
 
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>
