@@ -19,6 +19,8 @@
 
 ## 体验地址
 
+使用前请先确保自己的网络环境可以访问 Bangumi / Bangumi API。
+
 Github Pages: https://hsiao05.github.io/Seiyuu-Trace/
 
 ---
