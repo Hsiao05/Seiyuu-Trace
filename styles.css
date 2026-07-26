@@ -444,6 +444,11 @@ h2 { margin-bottom: 4px; font-size: 18px; }
 .drawer-birthday strong, .drawer-birthday small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drawer-birthday strong { font-size: 12px; }.drawer-birthday small { margin-top: 3px; color: var(--muted); font-size: 9px; }
 
+/* Keep faces visible when portrait photos are cropped into circles. */
+.avatar, .podium-avatar, .recap-feature img,
+.birthday-list-row img, .drawer-birthday img,
+.voice-card .character-portrait { object-position: center top; }
+
 @media (max-width: 940px) {
   .global-progress, .global-notice { width: calc(100% - 40px); }
   .library-tools, .character-tools, .actor-library-tools { grid-template-columns: 1fr 1fr; }
