@@ -40,6 +40,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .inline-input input, .modal input, .modal textarea { width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
 .inline-input input { min-width: 0; height: 36px; padding: 0 10px; border-color: #415152; background: #223132; color: #fff; font-size: 12px; }
 .inline-input input::placeholder { color: #82908f; }
+.import-scope { margin: 14px 0 0; padding: 0; border: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.import-scope legend { grid-column: 1 / -1; margin-bottom: 6px; color: #7f918f; font-size: 10px; }
+.import-scope label { min-width: 0; cursor: pointer; }
+.import-scope input { position: absolute; opacity: 0; pointer-events: none; }
+.import-scope span { min-height: 31px; padding: 0 7px; border: 1px solid #3b4d4e; border-radius: 5px; color: #91a09f; display: grid; place-items: center; font-size: 10px; }
+.import-scope input:checked + span { border-color: #ef735d; background: rgba(239,115,93,.14); color: #fff; }
+.import-scope input:focus-visible + span { outline: 3px solid rgba(239,115,93,.28); outline-offset: 2px; }
 .icon-btn { width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 6px; background: transparent; display: inline-grid; place-items: center; cursor: pointer; }
 .icon-btn:hover { background: rgba(127,140,141,.1); }
 .icon-btn svg { width: 17px; height: 17px; }
