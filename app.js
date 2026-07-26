@@ -10,11 +10,13 @@ const state = {
   anime: [],
   actors: [],
   source: 'Waiting for import',
+  collectionScope: 'watched',
   mode: 'weighted', role: 'all', query: '', controller: null
 };
 let recapIndex = 0;
 let recapTimer = null;
 let recapPlaying = true;
+let needsRoleMigration = false;
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -30,7 +32,11 @@ function render() {
   const q = state.query.trim().toLowerCase();
   const actors = state.actors.filter(a => {
     const roleMatch = state.role === 'all' || a.credits.some(c => c.role === state.role);
-    const text = [a.name,a.latin,...a.credits.flatMap(c => [c.anime,c.character])].join(' ').toLowerCase();
+    const creditText = a.credits.flatMap(c => {
+      const subject = animeById(c.subjectId);
+      return [c.anime,c.animeOriginal,c.character,subject?.name,subject?.nameCn,subject?.originalName];
+    });
+    const text = [a.name,a.latin,...creditText].filter(Boolean).join(' ').toLowerCase();
     return roleMatch && (!q || text.includes(q));
   }).sort((a,b) => score(b) - score(a) || b.credits.length - a.credits.length);
   const roles = state.actors.reduce((n,a) => n + a.credits.length, 0);
@@ -40,6 +46,12 @@ function render() {
   $('#navAnimeCount').textContent = state.anime.length;
   $('#sourceLabel').textContent = state.source.toUpperCase();
   $('#mobileImportGuide').hidden = state.anime.length > 0 || state.actors.length > 0;
+  const allCollections = state.collectionScope === 'all';
+  const customCollection = state.collectionScope === 'custom';
+  $('#animeMetricLabel').textContent = allCollections ? '列表动画' : customCollection ? '导入动画' : '看过动画';
+  $('#animeDelta').textContent = allCollections ? '全部收藏状态' : customCollection ? '按作品 ID 导入' : '已完成收藏';
+  $('#actorMetricLabel').textContent = allCollections || customCollection ? '涉及声优' : '听过声优';
+  $('#collectionDescription').textContent = allCollections ? '从你的 Bangumi 动画列表中，查看所有相关声优。' : customCollection ? '从导入的动画中，查看相关声优与角色。' : '从看过的动画中，找出最熟悉的那些声音。';
   $('#scoreHeading').textContent = state.mode === 'weighted' ? '出演数 / 加权分' : '出演数';
   $('#rankingHint').textContent = state.mode === 'weighted' ? '综合角色类型与出演次数计算熟悉度' : '每条出演记录等权，按总次数排序';
   $('#rankingList').innerHTML = actors.map((a,i) => actorHTML(a,i)).join('');
@@ -93,14 +105,16 @@ async function pool(items, limit, worker) {
 
 function normalizeSubject(raw) {
   const s = raw.subject || raw;
-  return { id: s.id, name: s.name_cn || s.name || `#${s.id}`, date: String(s.date || '').slice(0,4), image: s.images?.large || s.images?.common || '' };
+  const nameCn = String(s.name_cn || '').trim();
+  const originalName = String(s.name || '').trim();
+  return { id: s.id, name: nameCn || originalName || `#${s.id}`, nameCn, originalName, date: String(s.date || '').slice(0,4), image: s.images?.large || s.images?.common || '' };
 }
 function mapRole(item) {
-  const type = Number(item.type ?? item.character?.type);
-  const rel = String(item.relation || '').toLowerCase();
-  if (type === 1 || /主角|main/.test(rel)) return 'main';
-  if (type === 2 || /配角|support/.test(rel)) return 'support';
-  if (type === 3 || /客串|guest/.test(rel)) return 'guest';
+  const rel = String(item.relation || '').trim().toLowerCase();
+  if (/主角|main(?: character)?/.test(rel)) return 'main';
+  if (/配角|support(?:ing)?(?: character)?/.test(rel)) return 'support';
+  if (/客串|guest|cameo/.test(rel)) return 'guest';
+  if (/闲角|minor(?: character)?/.test(rel)) return 'minor';
   return 'minor';
 }
 function extractActors(subject, characterRows) {
@@ -109,13 +123,13 @@ function extractActors(subject, characterRows) {
     const character = row.character || row;
     const role = mapRole(row);
     for (const person of row.actors || character.actors || []) {
-      out.push({ person, credit: { anime: subject.name, character: character.name_cn || character.name || '未命名角色', characterId: character.id, role, subjectId: subject.id } });
+      out.push({ person, credit: { anime: subject.name, animeOriginal: subject.originalName, character: character.name_cn || character.name || '未命名角色', characterId: character.id, role, subjectId: subject.id } });
     }
   }
   return out;
 }
 
-async function importSubjects(subjects, source) {
+async function importSubjects(subjects, source, scope=state.collectionScope) {
   state.controller?.abort(); state.controller = new AbortController();
   const signal = state.controller.signal, actorMap = new Map(), errors = [];
   setProgress(0, subjects.length, '准备读取作品角色…'); notice('');
@@ -132,8 +146,8 @@ async function importSubjects(subjects, source) {
       } catch (e) { if (e.name !== 'AbortError') errors.push(subject.name); else throw e; }
       done++; setProgress(done,subjects.length,`正在读取角色与声优 · ${subject.name}`);
     });
-    state.anime = subjects; state.actors = [...actorMap.values()]; state.source = source;
-    localStorage.setItem('seitrace-data', JSON.stringify({anime:state.anime,actors:state.actors,source:state.source,savedAt:Date.now()}));
+    state.anime = subjects; state.actors = [...actorMap.values()]; state.source = source; state.collectionScope = scope;
+    localStorage.setItem('seitrace-data', JSON.stringify({schemaVersion:2,anime:state.anime,actors:state.actors,source:state.source,collectionScope:state.collectionScope,savedAt:Date.now()}));
     $('#syncTitle').textContent = source; $('#syncTime').textContent = '刚刚同步'; $('#syncDot').classList.remove('empty'); $('#syncDot').style.background = 'var(--mint)';
     if (errors.length) notice(`${errors.length} 部作品未能读取角色资料，其余结果已完成。`);
     render();
@@ -144,19 +158,22 @@ async function importSubjects(subjects, source) {
 
 async function importUid() {
   const uid = $('#uidInput').value.trim(); if (!uid) return notice('请输入 Bangumi UID 或用户名。');
+  const scope = $('input[name="collectionScope"]:checked')?.value || 'watched';
+  const scopeLabel = scope === 'all' ? '全部列表' : '已看过';
+  const typeFilter = scope === 'watched' ? '&type=2' : '';
   state.controller?.abort(); state.controller = new AbortController();
   const signal = state.controller.signal, rows = []; let offset = 0;
-  setProgress(0,1,'正在读取看过的动画…'); notice('');
+  setProgress(0,1,scope === 'all' ? '正在读取全部动画收藏…' : '正在读取看过的动画…'); notice('');
   try {
     while(true) {
-      const page = await api(`/v0/users/${encodeURIComponent(uid)}/collections?subject_type=2&type=2&limit=50&offset=${offset}`, {signal});
+      const page = await api(`/v0/users/${encodeURIComponent(uid)}/collections?subject_type=2${typeFilter}&limit=50&offset=${offset}`, {signal});
       rows.push(...(page.data || []));
       const total = page.total || rows.length; setProgress(rows.length,total,`已读取 ${Math.min(rows.length,total)} / ${total} 部动画`);
       if (!page.data?.length || rows.length >= total) break; offset += page.data.length;
     }
     const unique = [...new Map(rows.map(r => { const s=normalizeSubject(r); return [s.id,s]; })).values()];
-    if (!unique.length) throw new Error('该用户没有公开的“看过”动画，或收藏设置为私密。');
-    await importSubjects(unique, `Bangumi · ${uid}`);
+    if (!unique.length) throw new Error(scope === 'all' ? '该用户没有公开的动画收藏，或收藏设置为私密。' : '该用户没有公开的“看过”动画，或收藏设置为私密。');
+    await importSubjects(unique, `Bangumi · ${uid} · ${scopeLabel}`, scope);
   } catch(e) { $('#progressPanel').hidden=true; if(e.name!=='AbortError') notice(e.message || 'UID 导入失败，请确认用户存在且收藏公开。'); }
 }
 
@@ -168,7 +185,7 @@ async function importIds() {
   try {
     await pool(ids,4,async id => { try { subjects.push(normalizeSubject(await api(`/v0/subjects/${id}`,{signal:state.controller.signal}))); } catch(e) { if(e.name==='AbortError') throw e; } finally { done++; setProgress(done,ids.length,`正在识别作品 · ${id}`); } });
     const merged = [...new Map([...state.anime,...subjects].map(s=>[s.id,s])).values()];
-    await importSubjects(merged,'批量作品 ID');
+    await importSubjects(merged,'批量作品 ID','custom');
   } catch(e) { $('#progressPanel').hidden=true; if(e.name!=='AbortError') notice(e.message); }
 }
 
@@ -177,8 +194,9 @@ async function searchApi() {
   $('#apiSearchProgress').hidden=false; $('#apiResults').innerHTML='';
   try {
     const data=await api('/v0/search/subjects',{method:'POST',body:JSON.stringify({keyword:q,filter:{type:[2]}})});
-    const rows=(data.data||[]).slice(0,12);
-    $('#apiResults').innerHTML=rows.length?rows.map(raw=>{const s=normalizeSubject(raw);const url=`https://bgm.tv/subject/${s.id}`;return `<div class="api-result"><a class="cover-link bgm-link" href="${url}" target="_blank" rel="noopener"><img src="${esc(s.image)}" alt="${esc(s.name)}"></a><div><a class="bgm-link" href="${url}" target="_blank" rel="noopener"><strong>${esc(s.name)}</strong></a><small>${esc(s.date||'年份未知')} · ID ${s.id}</small></div><button class="secondary-btn add-result" type="button" data-id="${s.id}">添加</button></div>`}).join(''):'<p class="dialog-placeholder">没有找到动画结果</p>';
+    const normalized=(data.data||[]).map(normalizeSubject);
+    const rows=normalized.sort((a,b)=>Number(b.nameCn===q)-Number(a.nameCn===q)||Number(b.name===q)-Number(a.name===q)).slice(0,12);
+    $('#apiResults').innerHTML=rows.length?rows.map(s=>{const url=`https://bgm.tv/subject/${s.id}`;const original=s.originalName&&s.originalName!==s.name?`${s.originalName} · `:'';return `<div class="api-result"><a class="cover-link bgm-link" href="${url}" target="_blank" rel="noopener"><img src="${esc(s.image)}" alt="${esc(s.name)}"></a><div><a class="bgm-link" href="${url}" target="_blank" rel="noopener"><strong>${esc(s.name)}</strong></a><small>${esc(original)}${esc(s.date||'年份未知')} · ID ${s.id}</small></div><button class="secondary-btn add-result" type="button" data-id="${s.id}">添加</button></div>`}).join(''):'<p class="dialog-placeholder">没有找到动画结果</p>';
     $$('.add-result').forEach(btn=>btn.addEventListener('click',()=>{ $('#batchInput').value=btn.dataset.id; $('#apiDialog').close(); importIds(); }));
   } catch(e) { $('#apiResults').innerHTML=`<p class="dialog-placeholder">${esc(e.message)}</p>`; }
   finally { $('#apiSearchProgress').hidden=true; }
@@ -207,9 +225,10 @@ function recapSlides() {
   }).join('');
   const roleCards = Object.entries(ROLE).map(([key,meta]) => `<div class="recap-role ${key}"><strong>${roleTotals[key]}</strong><span>${meta.label}角色</span></div>`).join('');
   const representative = [...top.credits].sort((a,b)=>ROLE[b.role].weight-ROLE[a.role].weight)[0];
+  const collectionLabel = state.collectionScope === 'all' ? '列表动画' : state.collectionScope === 'custom' ? '导入动画' : '看过动画';
   return [
     `<div class="recap-slide"><div class="recap-seal"><i data-lucide="award"></i></div><p class="recap-kicker">SEI TRACE AWARDS</p><h2 class="recap-title">恭喜你，成为了<br>名副其实的“声优痴”</h2><p class="recap-subtitle">${state.anime.length} 部动画、${state.actors.length} 种声音，共同组成了只属于你的声音图鉴。</p></div>`,
-    `<div class="recap-slide"><p class="recap-kicker">YOUR SOUND UNIVERSE</p><span class="recap-big-number">${state.actors.length}</span><span class="recap-unit">位声优，曾在你的耳边留下声音</span><div class="recap-facts"><div class="recap-fact"><span>看过动画</span><strong>${state.anime.length} 部</strong></div><div class="recap-fact"><span>相遇角色</span><strong>${roles} 个</strong></div><div class="recap-fact"><span>作品年代跨度</span><strong>${span || 0} 年</strong></div></div></div>`,
+    `<div class="recap-slide"><p class="recap-kicker">YOUR SOUND UNIVERSE</p><span class="recap-big-number">${state.actors.length}</span><span class="recap-unit">位声优，出现在你的声音图鉴中</span><div class="recap-facts"><div class="recap-fact"><span>${collectionLabel}</span><strong>${state.anime.length} 部</strong></div><div class="recap-fact"><span>关联角色</span><strong>${roles} 个</strong></div><div class="recap-fact"><span>作品年代跨度</span><strong>${span || 0} 年</strong></div></div></div>`,
     `<div class="recap-slide"><p class="recap-kicker">TOP VOICES</p><h2 class="recap-title">你的声优领奖台</h2><p class="recap-subtitle">按角色权重与出演记录综合计算，这是你最熟悉的三种声音。</p><div class="podium">${podium}</div></div>`,
     `<div class="recap-slide"><p class="recap-kicker">ROLE SPECTRUM</p><h2 class="recap-title">你听过的角色，<br>不只一种分量</h2><div class="recap-role-grid">${roleCards}</div><p class="recap-subtitle">其中主角占 ${roles ? Math.round(roleTotals.main/roles*100) : 0}%，你共听过 ${roleTotals.main} 位主角的声音。</p></div>`,
     `<div class="recap-slide"><p class="recap-kicker">MOST FAMILIAR</p><h2 class="recap-title">跨越最多作品的熟悉声线</h2><div class="recap-feature"><a href="https://bgm.tv/person/${familiar.id}" target="_blank" rel="noopener"><img src="${esc(familiar.image||placeholder(familiar.name))}" alt="${esc(familiar.name)}"></a><div><h3>${esc(familiar.name)}</h3><p>${esc(familiar.latin||'')}</p><p class="recap-stat-line">在 ${familiarWorks} 部不同作品中与你相遇</p></div></div></div>`,
@@ -268,14 +287,14 @@ function bind() {
   $$('.segmented button').forEach(b=>b.addEventListener('click',()=>{$$('.segmented button').forEach(x=>{x.classList.remove('active');x.setAttribute('aria-pressed','false')});b.classList.add('active');b.setAttribute('aria-pressed','true');state.mode=b.dataset.mode;render();}));
   $$('.filter-chip').forEach(b=>b.addEventListener('click',()=>{$$('.filter-chip').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.role=b.dataset.role;render();}));
   $('#cancelBtn').addEventListener('click',()=>state.controller?.abort());
-  $('#refreshBtn').addEventListener('click',()=>state.anime.length?importSubjects(state.anime,state.source):notice('当前没有可重新统计的作品。'));
+  $('#refreshBtn').addEventListener('click',()=>state.anime.length?importSubjects(state.anime,state.source,state.collectionScope):notice('当前没有可重新统计的作品。'));
   $('#menuBtn').addEventListener('click',toggleSidebar);
   $('#sidebarClose').addEventListener('click',()=>closeSidebar(true));
   $('#sidebarBackdrop').addEventListener('click',()=>closeSidebar(true));
   $('#mobileImportGuide').addEventListener('click',()=>openSidebar(true));
   $$('.sidebar .nav-item').forEach(item=>item.addEventListener('click',()=>closeSidebar()));
   $('.sidebar .brand').addEventListener('click',e=>{e.preventDefault();closeSidebar();});
-  $('#clearBtn').addEventListener('click',()=>{localStorage.removeItem('seitrace-data');Object.assign(state,{anime:[],actors:[],source:'Waiting for import',query:'',role:'all'});$('#searchInput').value='';$('#syncTitle').textContent='尚未导入';$('#syncTime').textContent='导入后将保存在本机';$('#syncDot').removeAttribute('style');$('#syncDot').classList.add('empty');notice('已清空本地导入数据。');render();});
+  $('#clearBtn').addEventListener('click',()=>{localStorage.removeItem('seitrace-data');Object.assign(state,{anime:[],actors:[],source:'Waiting for import',collectionScope:'watched',query:'',role:'all'});$('#searchInput').value='';$('input[name="collectionScope"][value="watched"]').checked=true;$('#syncTitle').textContent='尚未导入';$('#syncTime').textContent='导入后将保存在本机';$('#syncDot').removeAttribute('style');$('#syncDot').classList.add('empty');notice('已清空本地导入数据。');render();});
   $('#recapBtn').addEventListener('click',openRecap);
   $$('[data-action="open-recap"]').forEach(el=>el.addEventListener('click',openRecap));
   $('#recapClose').addEventListener('click',closeRecap);
@@ -293,9 +312,25 @@ try {
   const saved=JSON.parse(localStorage.getItem('seitrace-data'));
   const isOldDemo=saved?.source==='Demo Collection'||saved?.actors?.some(a=>String(a.id).startsWith('demo-'));
   if(isOldDemo) localStorage.removeItem('seitrace-data');
-  else if(saved?.anime?.length && saved?.actors){state.anime=saved.anime;state.actors=saved.actors;state.source=saved.source||'本地收藏';$('#syncTitle').textContent=state.source;$('#syncTime').textContent=new Date(saved.savedAt).toLocaleString('zh-CN');$('#syncDot').classList.remove('empty');$('#syncDot').style.background='var(--mint)';}
+  else if(saved?.anime?.length && saved?.actors){
+    state.anime=saved.anime;
+    state.actors=saved.actors;
+    state.source=saved.source||'本地收藏';
+    state.collectionScope=saved.collectionScope||'watched';
+    needsRoleMigration=saved.schemaVersion!==2;
+    const scopeInput=$(`input[name="collectionScope"][value="${state.collectionScope}"]`);
+    if(scopeInput) scopeInput.checked=true;
+    $('#syncTitle').textContent=state.source;
+    $('#syncTime').textContent=new Date(saved.savedAt).toLocaleString('zh-CN');
+    $('#syncDot').classList.remove('empty');
+    $('#syncDot').style.background='var(--mint)';
+  }
 } catch {}
 bind(); render();
+if(needsRoleMigration&&state.anime.length){
+  notice('角色分类规则已更新，正在按 Bangumi 的角色属性重新统计。');
+  importSubjects(state.anime,state.source,state.collectionScope);
+}
 const recapHash = location.hash.match(/^#recap-(\d+)$/);
 if (recapHash && state.actors.length) {
   openRecap();
