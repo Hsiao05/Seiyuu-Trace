@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
   <div class="app-shell">
@@ -23,7 +23,7 @@
         <button class="nav-item active" type="button"><i data-lucide="chart-no-axes-column-increasing"></i><span>声优统计</span></button>
         <button class="nav-item" type="button" data-action="open-recap"><i data-lucide="trophy"></i><span>声迹颁奖礼</span></button>
         <button class="nav-item" type="button" data-action="focus-search"><i data-lucide="search"></i><span>搜索动画</span></button>
-        <button class="nav-item" type="button" data-action="show-library"><i data-lucide="library-big"></i><span>片目库</span><b id="navAnimeCount">12</b></button>
+        <button class="nav-item" type="button" data-action="show-library"><i data-lucide="library-big"></i><span>片目库</span><b id="navAnimeCount">0</b></button>
       </nav>
 
       <div class="sidebar-section">
@@ -33,6 +33,11 @@
           <input id="uidInput" type="text" placeholder="用户名或 UID" autocomplete="off">
           <button id="uidImportBtn" class="icon-btn accent" type="button" aria-label="导入 UID" title="导入 UID"><i data-lucide="arrow-right"></i></button>
         </div>
+        <fieldset class="import-scope">
+          <legend>导入范围</legend>
+          <label><input type="radio" name="collectionScope" value="watched" checked><span>已看过</span></label>
+          <label><input type="radio" name="collectionScope" value="all"><span>全部列表</span></label>
+        </fieldset>
         <button id="batchToggle" class="text-action" type="button"><i data-lucide="list-plus"></i>按作品 ID 批量导入</button>
       </div>
 
@@ -51,13 +56,13 @@
           <input id="searchInput" type="search" placeholder="搜索已导入声优、角色或动画…" autocomplete="off">
           <kbd>⌘ K</kbd>
         </div>
-        <button id="apiSearchBtn" class="secondary-btn" type="button"><i data-lucide="globe-2"></i><span>搜索 Bangumi</span></button>
+        <button id="apiSearchBtn" class="secondary-btn" type="button" aria-label="搜索 Bangumi"><i data-lucide="globe-2"></i><span>搜索 Bangumi</span></button>
         <button id="refreshBtn" class="icon-btn" type="button" aria-label="重新统计" title="重新统计"><i data-lucide="refresh-cw"></i></button>
       </header>
 
       <section class="content">
         <div class="page-heading">
-          <div><p class="eyebrow" id="sourceLabel">WAITING FOR IMPORT</p><h1>我的声音图鉴</h1><p>从看过的动画中，找出最熟悉的那些声音。</p></div>
+          <div><p class="eyebrow" id="sourceLabel">WAITING FOR IMPORT</p><h1>我的声音图鉴</h1><p id="collectionDescription">从看过的动画中，找出最熟悉的那些声音。</p></div>
           <div class="heading-actions">
             <button id="recapBtn" class="recap-launch" type="button"><i data-lucide="sparkles"></i><span><strong>声迹颁奖礼</strong><small>生成我的回顾</small></span></button>
             <div class="segmented" role="group" aria-label="排序方式">
@@ -82,8 +87,8 @@
         </button>
 
         <section class="metrics" aria-label="数据概览">
-          <article class="metric"><div class="metric-icon coral"><i data-lucide="clapperboard"></i></div><div><span>看过动画</span><strong id="animeCount">0</strong><small id="animeDelta">已完成收藏</small></div></article>
-          <article class="metric"><div class="metric-icon mint"><i data-lucide="mic-2"></i></div><div><span>听过声优</span><strong id="actorCount">0</strong><small id="actorDelta">按出演记录去重</small></div></article>
+          <article class="metric"><div class="metric-icon coral"><i data-lucide="clapperboard"></i></div><div><span id="animeMetricLabel">看过动画</span><strong id="animeCount">0</strong><small id="animeDelta">已完成收藏</small></div></article>
+          <article class="metric"><div class="metric-icon mint"><i data-lucide="mic-2"></i></div><div><span id="actorMetricLabel">听过声优</span><strong id="actorCount">0</strong><small id="actorDelta">按出演记录去重</small></div></article>
           <article class="metric"><div class="metric-icon ink"><i data-lucide="drama"></i></div><div><span>角色记录</span><strong id="roleCount">0</strong><small id="roleDelta">主角权重最高</small></div></article>
         </section>
 
@@ -131,7 +136,7 @@
   <dialog id="apiDialog" class="modal search-modal">
     <form method="dialog">
       <div class="modal-head"><div><p class="eyebrow">BANGUMI SEARCH</p><h2>搜索动画</h2></div><button class="icon-btn" value="cancel" aria-label="关闭"><i data-lucide="x"></i></button></div>
-      <div class="api-search-row"><input id="apiSearchInput" type="search" placeholder="输入中文、日文或英文标题"><button id="apiSearchSubmit" class="primary-btn" type="button"><i data-lucide="search"></i>搜索</button></div>
+      <div class="api-search-row"><input id="apiSearchInput" type="search" placeholder="输入简体中文、日文或英文标题"><button id="apiSearchSubmit" class="primary-btn" type="button"><i data-lucide="search"></i>搜索</button></div>
       <div id="apiSearchProgress" class="mini-progress" hidden><span></span></div>
       <div id="apiResults" class="api-results"><p class="dialog-placeholder">搜索结果会显示在这里</p></div>
     </form>
@@ -160,6 +165,6 @@
   </section>
 
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
